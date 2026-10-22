@@ -1,6 +1,7 @@
 import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
+import client from 'prom-client'; // 👈 নতুন
 import { db } from './db';
 import { redis, connectRedis } from './redis';
 import authRoutes from './routes/auth';
@@ -11,9 +12,29 @@ import redirectRoutes from './routes/redirect';
 const app = express();
 const PORT = Number(process.env.PORT) || 3000;
 
+// Prometheus Setup
+const register = new client.Registry();
+client.collectDefaultMetrics({ register });
+
+const httpRequestDuration = new client.Histogram({
+  name: 'http_request_duration_seconds',
+  help: 'Duration of HTTP requests in seconds',
+  labelNames: ['method', 'route', 'status_code'],
+});
+register.registerMetric(httpRequestDuration);
+
 app.set('trust proxy', 1);
 app.use(cors({ origin: process.env.ALLOWED_ORIGINS?.split(',') || '*', credentials: true }));
 app.use(express.json({ limit: '1mb' }));
+
+// Prometheus Middleware
+app.use((req, res, next) => {
+  const end = httpRequestDuration.startTimer();
+  res.on('finish', () => {
+    end({ method: req.method, route: req.path, status_code: res.statusCode });
+  });
+  next();
+});
 
 app.get('/health', async (_req, res) => {
   try {
@@ -23,6 +44,12 @@ app.get('/health', async (_req, res) => {
   } catch (err) {
     res.status(503).json({ status: 'unhealthy', error: (err as Error).message });
   }
+});
+
+// Prometheus Endpoint
+app.get('/metrics', async (_req, res) => {
+  res.set('Content-Type', register.contentType);
+  res.end(await register.metrics());
 });
 
 app.use('/api/auth', authRoutes);
