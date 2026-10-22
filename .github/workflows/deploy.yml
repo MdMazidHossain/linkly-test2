@@ -14,7 +14,7 @@ jobs:
     name: Build & Push Images
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
+      - name: Checkout Code
         uses: actions/checkout@v4
 
       - name: Set up Docker Buildx
@@ -56,32 +56,24 @@ jobs:
     needs: build-push
     runs-on: ubuntu-latest
     steps:
-      - name: SSH Deploy
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.VPS_HOST }}
-          username: ${{ secrets.VPS_USER }}
-          key: ${{ secrets.VPS_SSH_KEY }}
-          port: 22
-          use_insecure_cipher: true
-          script: |
+
             set -e
             cd /home/deploy/apps/linkly
 
-            # Refresh env files
+            # 3. env ফাইল আপডেট করা
             printf '%s' '${{ secrets.MAIN_ENV }}' > .env
             printf '%s' '${{ secrets.BACKEND_ENV }}' > backend.env
             chmod 600 .env backend.env
 
-            # Update TAG to current commit
+            # 4. নতুন ইমেজ ট্যাগ আপডেট করা
             sed -i '/^TAG=/d' .env
             echo "TAG=${{ github.sha }}" >> .env
 
-            # Pull and restart
+            # 5. নতুন ইমেজ পুল করে কন্টেইনার রিস্টার্ট করা
             docker compose pull backend frontend
             docker compose up -d --remove-orphans backend frontend
 
-            # Health checks
+            # 6. হেলথ চেক (যদি ফেইল করে তবে ডিপ্লয় ফেইল হবে)
             sleep 10
             curl -fs http://localhost:3000/health || {
               echo "❌ Backend unhealthy"
@@ -92,5 +84,11 @@ jobs:
               exit 1
             }
 
+            # 7. পুরনো ইমেজ ক্লিনআপ
             docker image prune -f
+            
             echo "✅ Deploy successful: ${{ github.sha }}"
+          EOF
+
+          # 8. Private Key ডিলিট করা (নিরাপত্তার জন্য)
+          rm private_key
