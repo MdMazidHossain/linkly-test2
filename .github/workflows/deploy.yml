@@ -43,8 +43,8 @@ jobs:
           context: ./frontend
           push: true
           build-args: |
-            VITE_API_URL=https://linkly.example.com/api
-            VITE_BASE_URL=https://linkly.example.com
+            VITE_API_URL=https://techlinkassist.work.gd/api
+            VITE_BASE_URL=https://techlinkassist.work.gd
           tags: |
             ${{ env.FRONTEND_IMAGE }}:latest
             ${{ env.FRONTEND_IMAGE }}:${{ github.sha }}
@@ -62,7 +62,13 @@ jobs:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
-          port: ${{ secrets.VPS_PORT }}
+          
+          # 👇 এখানে সরাসরি 22 দিয়ে দিলাম, সিক্রেট লাগবে না
+          port: 22 
+          
+          # 👇 এই লাইনটা এরর ফিক্স করবে
+          use_insecure_cipher: true 
+          
           script: |
             set -e
             cd /home/deploy/apps/linkly
